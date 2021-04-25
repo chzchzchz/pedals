@@ -1,0 +1,8 @@
+[
+{
+  "device" : "usb-1a86_e026-event-kbd",
+  "keys" : {"a" : {"down" : ["xmms2", "seek", "-5s"] }},
+  "keys" : {"b" : {"down" : ["xmms2", "pause"], "up" : ["xmms2", "play"]}},
+  "keys" : {"c" : {"down" : ["xmms2", "seek", "+5s"] }}
+}
+]
