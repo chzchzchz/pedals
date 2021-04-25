@@ -1,0 +1,6 @@
+[
+{
+  "device" : "usb-1a86_e026-event-kbd",
+  "keys" : {"a" : {"down" : ["./on_up_a.sh"] }}
+}
+]
