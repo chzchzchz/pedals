@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gvalkov/golang-evdev"
+	"gopkg.in/fsnotify.v0"
 )
 
 const devInputPath = "/dev/input/by-id"
@@ -93,10 +94,15 @@ func main() {
 	}
 
 	// Serialize all commands through cmdc.
-	cmdc := make(chan *exec.Cmd, 3)
+	cmdc := make(chan []string, 3)
 	go func() {
-		for cmd := range cmdc {
-			if err := cmd.Run(); err != nil {
+		for cmdArgs := range cmdc {
+			ctx, cancel := context.WithTimeout(context.TODO(), cmdTimeout)
+			cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+			err := cmd.Run()
+			cancel()
+			if err != nil {
 				fmt.Println(err)
 			}
 		}
@@ -104,27 +110,57 @@ func main() {
 
 	// Launch io goroutine for every device.
 	var wg sync.WaitGroup
-	for _, dc := range mustLoadConfig(os.Args[1]) {
+	for _, d := range mustLoadConfig(os.Args[1]) {
 		wg.Add(1)
-		go func() {
+		go func(dc *DeviceConfig) {
 			defer wg.Done()
-			if err := RunDevice(dc, cmdc); err != nil {
-				panic(err)
-			}
-		}()
+			dc.RunLoop(cmdc)
+		}(&d)
 	}
 	wg.Wait()
 }
 
-func RunDevice(dc DeviceConfig, cmdc chan<- *exec.Cmd) error {
-	devpath := filepath.Join(devInputPath, filepath.Base(dc.Device))
-	log.Println("opening", devpath)
-	kbd, err := evdev.Open(devpath)
+func (dc *DeviceConfig) path() string {
+	return filepath.Join(devInputPath, filepath.Base(dc.Device))
+}
+
+func (dc *DeviceConfig) RunLoop(cmdc chan<- []string) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	defer watcher.Close()
+	for {
+		err := dc.RunDevice(cmdc)
+		log.Printf("lost device: %v", err)
+		err = watcher.WatchFlags(devInputPath, fsnotify.FSN_CREATE)
+		if err != nil {
+			return err
+		}
+		for {
+			if _, err := os.Stat(dc.path()); err == nil {
+				break
+			} else if !os.IsNotExist(err) {
+				return err
+			}
+			select {
+			case <-watcher.Event:
+			case err := <-watcher.Error:
+				return err
+			}
+		}
+		watcher.RemoveWatch(dc.path())
+	}
+}
+
+func (dc *DeviceConfig) RunDevice(cmdc chan<- []string) error {
+	kbd, err := evdev.Open(dc.path())
 	if err != nil {
 		return err
 	}
 	defer kbd.File.Close()
 	defer kbd.Release()
+	log.Println("attached", dc.path())
 	kbd.Grab()
 	for {
 		ev, err := kbd.ReadOne()
@@ -150,9 +186,6 @@ func RunDevice(dc DeviceConfig, cmdc chan<- *exec.Cmd) error {
 		if len(cmdArgs) == 0 {
 			continue
 		}
-		ctx, _ := context.WithTimeout(context.TODO(), cmdTimeout)
-		cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		cmdc <- cmd
+		cmdc <- cmdArgs
 	}
 }
