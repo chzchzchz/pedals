@@ -1,0 +1,9 @@
+[
+{
+  "device" : "usb-1a86_e026-event-kbd",
+  "concurrent" : true,
+  "keys" : {"a" : {"down" : ["./examples/midi/on_a_down.sh"] }},
+  "keys" : {"b" : {"down" : ["./examples/midi/on_b_down.sh"]}},
+  "keys" : {"c" : {"down" : ["./on_c_down.sh"] }}
+}
+]

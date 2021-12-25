@@ -26,8 +26,9 @@ type KeyConfig struct {
 }
 
 type DeviceConfig struct {
-	Device string
-	Keys   map[string]KeyConfig
+	Device     string
+	Concurrent bool
+	Keys       map[string]KeyConfig
 }
 
 var ev2key = map[int]string{
@@ -95,6 +96,7 @@ func main() {
 
 	// Serialize all commands through cmdc.
 	cmdc := make(chan []string, 3)
+	defer close(cmdc)
 	go func() {
 		for cmdArgs := range cmdc {
 			ctx, cancel := context.WithTimeout(context.TODO(), cmdTimeout)
@@ -154,6 +156,19 @@ func (dc *DeviceConfig) RunLoop(cmdc chan<- []string) error {
 }
 
 func (dc *DeviceConfig) RunDevice(cmdc chan<- []string) error {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	cancels := make(map[*context.CancelFunc]struct{})
+
+	defer func() {
+		mu.Lock()
+		for c := range cancels {
+			(*c)()
+		}
+		mu.Unlock()
+		wg.Wait()
+	}()
+
 	kbd, err := evdev.Open(dc.path())
 	if err != nil {
 		return err
@@ -186,6 +201,28 @@ func (dc *DeviceConfig) RunDevice(cmdc chan<- []string) error {
 		if len(cmdArgs) == 0 {
 			continue
 		}
-		cmdc <- cmdArgs
+		if dc.Concurrent {
+			ctx, cancel := context.WithCancel(context.TODO())
+			mu.Lock()
+			cancels[&cancel] = struct{}{}
+			mu.Unlock()
+			wg.Add(1)
+			go func() {
+				defer func() {
+					mu.Lock()
+					delete(cancels, &cancel)
+					mu.Unlock()
+					wg.Done()
+				}()
+				cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+				cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+				if err := cmd.Run(); err != nil {
+					fmt.Println(err)
+				}
+				cancel()
+			}()
+		} else {
+			cmdc <- cmdArgs
+		}
 	}
 }
