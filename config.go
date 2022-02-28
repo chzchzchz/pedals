@@ -50,5 +50,8 @@ func mustLoadConfig(path string) (devs []DeviceConfig) {
 }
 
 func (dc *DeviceConfig) path() string {
+	if dc.Device[0] == '/' {
+		return dc.Device
+	}
 	return filepath.Join(devInputPath, filepath.Base(dc.Device))
 }
