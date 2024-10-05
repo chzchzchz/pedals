@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"sync"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/gvalkov/golang-evdev"
-	"gopkg.in/fsnotify.v0"
 )
 
 type Device struct {
@@ -28,23 +28,30 @@ func (d *Device) RunLoop() error {
 	for {
 		err := d.Run()
 		log.Printf("lost device: %v", err)
-		err = watcher.WatchFlags(devInputPath, fsnotify.FSN_CREATE)
+		err = watcher.Add(devInputPath)
 		if err != nil {
 			return err
 		}
 		for {
+			var ev fsnotify.Event
+			select {
+			case ev = <-watcher.Events:
+			case err := <-watcher.Errors:
+				return err
+			}
+			if !ev.Has(fsnotify.Create) {
+				continue
+			}
 			if _, err := os.Stat(d.path()); err == nil {
 				break
 			} else if !os.IsNotExist(err) {
 				return err
 			}
-			select {
-			case <-watcher.Event:
-			case err := <-watcher.Error:
-				return err
-			}
 		}
-		watcher.RemoveWatch(d.path())
+		watcher.Remove(devInputPath)
+		for len(watcher.Events) > 0 {
+			<-watcher.Events
+		}
 	}
 }
 
