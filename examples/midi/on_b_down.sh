@@ -1,5 +1,7 @@
 #!/bin/bash
 
+MIDIPORT=${MIDIPORT:-"MIDI4x4 MIDI Out 4"}
+
 # send stop message
-midisend -p "Midi Through Port-0" -s FC
-killall -9 jack_capture
+midisend -p "$MIDIPORT" -s FC
+killall -SIGINT jack_capture

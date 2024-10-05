@@ -1,8 +1,8 @@
 [
 {
   "device" : "usb-1a86_e026-event-kbd",
-  "keys" : {"a" : {"down" : ["xmms2", "seek", "-5s"], "hold" : ["xmms2", "pause"] }},
-  "keys" : {"b" : {"down" : ["xmms2", "pause"], "up" : ["xmms2", "play"]}},
-  "keys" : {"c" : {"down" : ["xmms2", "seek", "+5s"] }}
+  "keys" : {"a" : {"down" : ["xmms2", "seek", "-5s"]}},
+  "keys" : {"b" : {"up" : ["./xmms_jump.sh"]}},
+  "keys" : {"c" : {"down" : ["xmms2", "pause"], "hold" : ["./xmms_save.sh"] }}
 }
 ]
